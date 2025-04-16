@@ -5,41 +5,42 @@ const app = express();
 
 // Your Assistable API key
 const ASSISTABLE_API_KEY = 'bus|1744707446048x686040107233094700|1744812257026x217402437667029160';
-const ASSISTABLE_API_URL = 'https://api.assistable.ai/v2'; // Updated to v2
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // Inbound webhook handler
 app.post('/voice', async (req, res) => {
+  console.log('Received call:', req.body);
+  
   const twiml = new twilio.twiml.VoiceResponse();
   
   try {
-    // Log the incoming call details
-    console.log('Incoming call from:', req.body.From);
-    console.log('To:', req.body.To);
-    console.log('Using API URL:', ASSISTABLE_API_URL);
+    // For SIP Trunk integration, we need to connect the call to Assistable's SIP endpoint
+    twiml.dial().sip('sip:importingnumbersintosystem.pstn.twilio.com');
     
-    // Forward the call details to Assistable
-    const assistableResponse = await axios.post(`${ASSISTABLE_API_URL}/calls`, {
-      from: req.body.From,
-      to: req.body.To,
-      callSid: req.body.CallSid,
-      direction: 'inbound'
-    }, {
-      headers: {
-        'Authorization': `Bearer ${ASSISTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // Log the API key for debugging (make sure this is working)
+    console.log('Using Assistable API Key:', ASSISTABLE_API_KEY);
     
-    // Connect the call to Assistable's voice service
-    twiml.connect().stream({
-      url: `${ASSISTABLE_API_URL}/stream?key=${ASSISTABLE_API_KEY}`,
-    });
-    
+    // Optional: Notify Assistable about the incoming call via their API
+    try {
+      await axios.post('https://api.assistable.ai/v2/calls', {
+        from: req.body.From,
+        to: req.body.To,
+        callSid: req.body.CallSid,
+        apiKey: ASSISTABLE_API_KEY
+      }, {
+        headers: {
+          'Authorization': `Bearer ${ASSISTABLE_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (apiError) {
+      // Continue even if API notification fails
+      console.error('API notification error:', apiError.message);
+    }
   } catch (error) {
-    console.error('Error connecting to Assistable:', error);
+    console.error('Error in webhook:', error);
     twiml.say('Sorry, we encountered an error connecting to the voice assistant.');
   }
   
